@@ -1,0 +1,52 @@
+"app_name" = "Quitty";
+"menu_settings" = "Settings...";
+"menu_quit" = "Quit Quitty";
+"subtitle" = "Auto-quit apps when their last window closes";
+
+"tab_general" = "General";
+"tab_apps" = "App List";
+"tab_data" = "Data";
+
+"section_general" = "GENERAL";
+"launch_hidden" = "Launch hidden (menu bar only)";
+"show_menubar_icon" = "Show menu bar icon";
+"launch_at_login" = "Launch at login";
+"file_sync" = "File Sync";
+"sync_path" = "Sync Path:";
+"btn_choose" = "Choose...";
+"language" = "Language";
+
+"lang_system" = "System Default";
+"lang_en" = "English";
+"lang_zh" = "Chinese";
+
+"section_behavior" = "BEHAVIOR";
+"quit_delay" = "Quit delay";
+"mode" = "Mode:";
+"mode_exclude" = "All Apps (Except Listed)";
+"mode_include" = "Only Listed Apps";
+
+"section_apps" = "APP LIST";
+"btn_add" = "+ Add App";
+"btn_remove" = "- Remove";
+
+"section_permissions" = "SYSTEM PERMISSIONS";
+"accessibility_access" = "Accessibility Access";
+"status_authorized" = "Authorized";
+"status_unauthorized" = "Not Authorized";
+"btn_check" = "Check Again";
+"btn_grant" = "Grant Access";
+
+"alert_perm_title" = "Accessibility Access Required";
+"alert_perm_msg" = "Quitty needs Accessibility access to detect when app windows are closed.\n\nPlease grant access in System Settings → Privacy & Security → Accessibility, then click on the Quitty app again.";
+"btn_open_settings" = "Open System Settings";
+"btn_ignore" = "Ignore";
+
+"alert_hidden_title" = "Menu Bar Icon Hidden";
+"alert_hidden_msg" = "Quitty will no longer appear in the menu bar. To open settings again, simply launch the app from your Applications folder.";
+
+"panel_choose_app" = "Choose Application";
+"col_app" = "Application";
+
+"desc_exclude" = "Quitty will automatically quit all apps when they close, except those listed below:";
+"desc_include" = "Quitty will only automatically quit apps listed below:";

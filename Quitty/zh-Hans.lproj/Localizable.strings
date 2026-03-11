@@ -1,0 +1,52 @@
+"app_name" = "随手关";
+"menu_settings" = "设置...";
+"menu_quit" = "退出";
+"subtitle" = "在最后一个窗口关闭时自动退出应用";
+
+"tab_general" = "通用";
+"tab_apps" = "应用列表";
+"tab_data" = "数据";
+
+"section_general" = "通用";
+"launch_hidden" = "启动时隐藏 (仅在菜单栏显示)";
+"show_menubar_icon" = "显示菜单栏图标";
+"launch_at_login" = "登录时启动";
+"file_sync" = "文件同步";
+"sync_path" = "同步文件路径:";
+"btn_choose" = "选择...";
+"language" = "语言";
+
+"lang_system" = "跟随系统";
+"lang_en" = "English";
+"lang_zh" = "中文";
+
+"section_behavior" = "行为";
+"quit_delay" = "退出延迟";
+"mode" = "模式:";
+"mode_exclude" = "所有应用 (排除列表中的)";
+"mode_include" = "仅限列表中的应用";
+
+"section_apps" = "应用列表";
+"btn_add" = "+ 添加应用";
+"btn_remove" = "- 移除所选";
+
+"section_permissions" = "系统权限";
+"accessibility_access" = "辅助功能权限";
+"status_authorized" = "已授权";
+"status_unauthorized" = "未授权";
+"btn_check" = "再次检查";
+"btn_grant" = "授予权限";
+
+"alert_perm_title" = "需要辅助功能权限";
+"alert_perm_msg" = "“随手关”需要辅助功能权限来检测窗口关闭。请在“系统设置”→“隐私与安全性”→“辅助功能”中授予权限，然后再次点击“随手关”应用。";
+"btn_open_settings" = "打开系统设置";
+"btn_ignore" = "忽略";
+
+"alert_hidden_title" = "菜单栏图标已隐藏";
+"alert_hidden_msg" = "“随手关”将不再显示在菜单栏中。如需再次打开设置，请从“应用程序”文件夹重新启动本应用。";
+
+"panel_choose_app" = "选择应用程序";
+"col_app" = "应用程序";
+
+"desc_exclude" = "“随手关”将在关闭所有窗口后自动退出以下应用之外的所有应用：";
+"desc_include" = "“随手关”仅会自动退出以下列表中的应用：";
