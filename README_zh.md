@@ -1,4 +1,4 @@
-# Quitty `v1.0.0`
+# 随手关
 
 [简体中文] | [English](README.md)
 
