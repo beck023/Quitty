@@ -163,7 +163,11 @@ class Settings: ObservableObject {
             objectWillChange.send()
             defaults.set(newValue, forKey: Key.fileSyncEnabled.rawValue)
             if newValue {
-                saveToFile() // Initial push
+                if FileManager.default.fileExists(atPath: settingsFileURL.path) {
+                    loadFromFile()
+                } else {
+                    saveToFile() // Initial push if no file exists
+                }
                 startWatchingFile()
             } else {
                 fileWatcher?.cancel()

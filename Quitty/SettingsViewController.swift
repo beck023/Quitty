@@ -40,9 +40,9 @@ struct SettingsView: View {
                 }
                 .tag(2)
             
-            TroubleshootingSettingsView(settings: settings)
+            AboutSettingsView(settings: settings)
                 .tabItem {
-                    Label(settings.localizedString("tab_troubleshooting"), systemImage: "bolt.shield")
+                    Label(settings.localizedString("tab_about"), systemImage: "info.circle")
                 }
                 .tag(3)
         }
@@ -120,115 +120,44 @@ struct GeneralSettingsView: View {
     }
 }
 
-struct TroubleshootingSettingsView: View {
+struct AboutSettingsView: View {
     @ObservedObject var settings: Settings
-    @State private var isRunningDiagnostic = false
-    @State private var diagnosticResult = ""
-
+    
     var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 5) {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 2) {
-                                ForEach(settings.logs.indices, id: \.self) { index in
-                                    Text(settings.logs[index])
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundColor(.secondary)
-                                        .textSelection(.enabled)
-                                }
-                            }
-                            .padding(8)
-                        }
-                        .frame(minHeight: 200, maxHeight: 300)
-                        .background(Color(NSColor.textBackgroundColor))
-                        .cornerRadius(4)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                        )
-                        .onChange(of: settings.logs.count) { _ in
-                            if let last = settings.logs.indices.last {
-                                proxy.scrollTo(last, anchor: .bottom)
-                            }
-                        }
-                    }
-                    
-                    HStack {
-                        Spacer()
-                        Button(settings.localizedString("btn_clear_logs")) {
-                            settings.logs.removeAll()
-                        }
-                        .buttonStyle(.borderless)
-                        .font(.caption)
-                    }
-                }
-            } header: {
-                Text(settings.localizedString("section_logs"))
-            }
-
-            Section {
-                Button {
-                    runDiagnostic()
-                } label: {
-                    HStack {
-                        Text(settings.localizedString("btn_diagnostic"))
-                        if isRunningDiagnostic {
-                            Spacer()
-                            ProgressView().controlSize(.small)
-                        }
-                    }
-                }
-                .disabled(isRunningDiagnostic)
+        VStack(spacing: 20) {
+            Spacer()
+            
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .frame(width: 80, height: 80)
+            
+            VStack(spacing: 8) {
+                Text(settings.localizedString("app_name"))
+                    .font(.title).bold()
                 
-                if !diagnosticResult.isEmpty {
-                    Text(diagnosticResult)
-                        .font(.caption)
-                        .foregroundColor(diagnosticResult.contains("...") ? .orange : .secondary)
-                }
-            } header: {
-                Text(settings.localizedString("section_troubleshooting"))
-            }
-
-            Section {
-                HStack {
-                    Text(settings.localizedString("app_name"))
-                    Spacer()
-                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")")
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    private func runDiagnostic() {
-        isRunningDiagnostic = true
-        diagnosticResult = ""
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            guard let delegate = NSApplication.shared.delegate as? AppDelegate else {
-                isRunningDiagnostic = false
-                return
+                Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
             
-            let status = delegate.checkHealthAndFix()
-            if status == "restart" {
-                diagnosticResult = settings.localizedString("diagnostic_restarting")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    delegate.relaunch()
-                }
-            } else if status == "ok" {
-                diagnosticResult = settings.localizedString("diagnostic_ok")
-                isRunningDiagnostic = false
-            } else {
-                diagnosticResult = status // Likely "Not Authorized"
-                isRunningDiagnostic = false
-            }
+            Text(settings.localizedString("subtitle"))
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+            
+            Spacer()
+            
+            Text("© 2024-2026 Quitty Authors")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.bottom, 20)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+
 
 struct AppListSettingsView: View {
     @ObservedObject var settings: Settings
@@ -271,12 +200,13 @@ struct AppListSettingsView: View {
                             addApp()
                         } label: {
                             Image(systemName: "plus")
-                                .frame(width: 24, height: 20)
+                                .frame(width: 32, height: 24)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         
                         Divider()
-                            .frame(height: 12)
+                            .frame(height: 14)
                         
                         Button {
                             if let sel = selection {
@@ -287,14 +217,15 @@ struct AppListSettingsView: View {
                             }
                         } label: {
                             Image(systemName: "minus")
-                                .frame(width: 24, height: 20)
+                                .frame(width: 32, height: 24)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .disabled(selection == nil)
                     }
                     Spacer()
                 }
-                .frame(height: 24)
+                .frame(height: 28)
                 .background(Color(NSColor.controlBackgroundColor))
                 .overlay(
                     Rectangle()
@@ -393,9 +324,52 @@ struct DataSettingsView: View {
                     }
                 }
             } header: {
-                Text(settings.localizedString("tab_data"))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text(settings.localizedString("section_sync"))
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 5) {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(settings.logs.joined(separator: "\n"))
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .textSelection(.enabled)
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id("logBottom")
+                            }
+                        }
+                        .frame(height: 250) // Fixed height to prevent window overflow
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(4)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
+                        .onChange(of: settings.logs.count) { _ in
+                            proxy.scrollTo("logBottom", anchor: .bottom)
+                        }
+                        .onAppear {
+                            proxy.scrollTo("logBottom", anchor: .bottom)
+                        }
+                    }
+                    
+                    HStack {
+                        Spacer()
+                        Button(settings.localizedString("btn_clear_logs")) {
+                            settings.logs.removeAll()
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                    }
+                }
+            } header: {
+                Text(settings.localizedString("section_logs"))
             }
         }
         .formStyle(.grouped)

@@ -359,17 +359,20 @@ class WindowWatcher {
             return 
         }
 
-        // 2. Space Switch Protection:
-        // If we are switching spaces, we use a much longer delay instead of discarding.
-        var delay = isClosed ? 0.4 : 0.8
-        if Date().timeIntervalSince(lastSpaceChangeDate) < 3.0 {
-            delay = 3.5 // Wait for space animation to finish
-            Settings.shared.log("Deffering check for \(app.localizedName ?? "app") due to space change.")
-        }
-        
         Settings.shared.log("Received \(notification) for \(app.localizedName ?? "app") (PID: \(pid))")
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        // Electron-based apps (VS Code, Discord, etc) need more time to stabilize
+        let isElectron = self.isElectronApp(app)
+        let baseDelay = isClosed ? 0.4 : 0.8
+        let safetyMultiplier = isElectron ? 2.0 : 1.0
+        var totalDelay = baseDelay * safetyMultiplier
+        
+        if Date().timeIntervalSince(lastSpaceChangeDate) < 3.0 {
+            totalDelay = isElectron ? 5.0 : 3.5
+            Settings.shared.log("Deferring check for \(app.localizedName ?? "app") due to space change (Electron: \(isElectron))")
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) { [weak self] in
             self?.checkAndQuit(app: app)
         }
     }
@@ -438,13 +441,14 @@ class WindowWatcher {
             DispatchQueue.main.async {
                 self.pendingQuits[pid]?.cancel()
                 
-                // If app is currently active (user interacting), add more safety delay
+                // Electron apps get even more safety time on the final countdown
+                let isElectron = self.isElectronApp(app)
                 let isAppCurrentlyActive = app.isActive
-                let extraDelay = isAppCurrentlyActive ? 1.5 : 0.0
+                let extraDelay = (isAppCurrentlyActive ? 1.5 : 0.0) + (isElectron ? 1.0 : 0.0)
                 let totalDelay = Settings.shared.closeDelay + extraDelay
                 
-                if isAppCurrentlyActive {
-                    Settings.shared.log("App \(appName) is active. Using safety delay: \(totalDelay)s")
+                if isAppCurrentlyActive || isElectron {
+                    Settings.shared.log("App \(appName) needs more time (Active: \(isAppCurrentlyActive), Electron: \(isElectron)). Total delay: \(totalDelay)s")
                 }
                 
                 let workItem = DispatchWorkItem { [weak self] in
@@ -520,15 +524,19 @@ class WindowWatcher {
             return true // Safety
         }
 
+        let isElectron = NSRunningApplication(processIdentifier: pid).map { isElectronApp($0) } ?? false
+
         for window in windowList {
             guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t, ownerPID == pid else { continue }
             
             // Layer 0 is the standard window layer
             guard let layer = window[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
             
-            // Onscreen check (Minimized windows are NOT onscreen)
+            // Onscreen check
+            // CRITICAL: Electron windows can report isOnScreen = false during space transitions 
+            // even if they should still exist. We relax this for Electron.
             let isOnScreen = window[kCGWindowIsOnscreen as String] as? Bool ?? false
-            if !isOnScreen { continue }
+            if !isOnScreen && !isElectron { continue }
 
             // Alpha check (Exclude invisible background workers)
             let alpha = window[kCGWindowAlpha as String] as? Double ?? 0
@@ -538,13 +546,49 @@ class WindowWatcher {
             if let bounds = window[kCGWindowBounds as String] as? [String: Any],
                let width = bounds["Width"] as? CGFloat, let height = bounds["Height"] as? CGFloat {
                 
+                // Real windows are typically larger and HAVE A TITLE.
+                // Electron apps often keep a 500x500 or similar 'Unnamed' hidden window.
                 if width > 40 && height > 40 {
-                    let name = window[kCGWindowName as String] as? String ?? "Unnamed"
-                    Settings.shared.log("   -> Found active window: \(name) (\(Int(width))x\(Int(height)))")
+                    let name = window[kCGWindowName as String] as? String ?? ""
+                    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    // If it's an Electron app and has no title, it's almost certainly a background helper.
+                    // We only block quit if there's a window with an actual title.
+                    if isElectron && trimmedName.isEmpty {
+                        continue
+                    }
+                    
+                    Settings.shared.log("   -> [isActualWindowPresent] Found window: \(trimmedName.isEmpty ? "Unnamed" : name) (\(Int(width))x\(Int(height))) for \(pid)")
                     return true
                 }
             }
         }
+        return false
+    }
+
+    private func isElectronApp(_ app: NSRunningApplication) -> Bool {
+        guard let bundleID = app.bundleIdentifier?.lowercased() else { return false }
+        
+        // Common Electron and VS Code variants
+        let electronIDs = [
+            "com.microsoft.vscode",
+            "com.visualstudio.code",
+            "com.antigravity",
+            "com.github.electron",
+            "com.discordapp.discord",
+            "com.tinyspeck.slackmacgap", // Slack
+            "com.hnc.discord"
+        ]
+        
+        if electronIDs.contains(where: { bundleID.contains($0) }) {
+            return true
+        }
+        
+        // Also check if it's likely a custom Electron build (often in path)
+        if let path = app.bundleURL?.path.lowercased(), path.contains("electron") {
+            return true
+        }
+        
         return false
     }
 }

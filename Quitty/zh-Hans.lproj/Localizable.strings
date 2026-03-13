@@ -4,18 +4,19 @@
 "subtitle" = "在最后一个窗口关闭时自动退出应用";
 
 "tab_general" = "通用";
-"tab_apps" = "应用列表";
+"tab_apps" = "应用";
 "tab_data" = "数据";
-"tab_troubleshooting" = "故障排除";
+"tab_about" = "关于";
 
 "section_general" = "通用";
 "launch_hidden" = "启动时隐藏 (仅在菜单栏显示)";
 "show_menubar_icon" = "显示菜单栏图标";
 "launch_at_login" = "登录时启动";
+"language" = "语言";
+"section_sync" = "同步";
 "file_sync" = "文件同步";
 "sync_path" = "同步文件路径:";
 "btn_choose" = "选择...";
-"language" = "语言";
 
 "lang_system" = "跟随系统";
 "lang_en" = "English";
@@ -27,7 +28,7 @@
 "mode_exclude" = "所有应用 (排除列表中的)";
 "mode_include" = "仅限列表中的应用";
 
-"section_apps" = "应用列表";
+"section_apps" = "应用";
 "btn_add" = "+ 添加应用";
 "btn_remove" = "- 移除所选";
 
@@ -53,9 +54,5 @@
 "desc_exclude" = "“随手关”将在关闭所有窗口后自动退出以下应用之外的所有应用：";
 "desc_include" = "“随手关”仅会自动退出以下列表中的应用：";
 
-"section_troubleshooting" = "故障排除";
-"btn_diagnostic" = "运行状态盘点与自动修复";
-"diagnostic_ok" = "运行状态正常，正在监控应用。";
-"diagnostic_restarting" = "检测到异常，正在自动重启应用...";
 "section_logs" = "运行日志";
 "btn_clear_logs" = "清除日志";
