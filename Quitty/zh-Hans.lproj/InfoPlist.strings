@@ -1,4 +1,4 @@
-"CFBundleDisplayName" = "随手关";
-"CFBundleName" = "随手关";
-"NSAccessibilityUsageDescription" = "“随手关”需要辅助功能权限来监测窗口关闭事件。";
-"NSAppleEventsUsageDescription" = "“随手关”需要在窗口关闭时向应用发送退出指令。";
+"CFBundleDisplayName" = "静隐";
+"CFBundleName" = "静隐";
+"NSAccessibilityUsageDescription" = "“静隐”需要辅助功能权限来监测窗口关闭事件。";
+"NSAppleEventsUsageDescription" = "“静隐”需要在窗口关闭时向应用发送退出指令。";

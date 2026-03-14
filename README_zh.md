@@ -1,4 +1,4 @@
-# 随手关
+# 静隐
 
 [简体中文] | [English](README.md)
 
