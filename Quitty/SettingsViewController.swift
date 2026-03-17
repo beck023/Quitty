@@ -72,16 +72,6 @@ struct GeneralSettingsView: View {
                 Text(settings.localizedString("section_general"))
             }
             
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("\(settings.localizedString("quit_delay")): \(String(format: "%.1f", settings.closeDelay))s")
-                        .font(.body)
-                    Slider(value: $settings.closeDelay, in: 0...5, step: 0.1)
-                }
-                .padding(.vertical, 4)
-            } header: {
-                Text(settings.localizedString("section_behavior"))
-            }
 
             Section {
                 HStack {

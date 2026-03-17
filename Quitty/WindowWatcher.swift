@@ -5,18 +5,6 @@
 //
 //  The core engine that monitors window events across all running apps.
 //
-//  APPROACH (macOS Sequoia compatible):
-//  - Uses NSWorkspace notifications to track app launches/terminations
-//  - For each running app, creates a raw AXObserver watching for
-//    kAXWindowClosedNotification (no Swindler/AXSwift library needed)
-//  - When a window closes, checks if the app has any remaining windows
-//  - If no windows remain, terminates the app after the configured delay
-//
-//  This approach works on macOS Sequoia+ because:
-//  1. We use the raw C Accessibility API (AXObserver) directly
-//  2. We don't depend on Swindler which relies on broken internal APIs
-//  3. We use NSWorkspace for reliable app lifecycle tracking
-//
 
 import Cocoa
 import ApplicationServices
@@ -387,8 +375,6 @@ class WindowWatcher {
         }
 
         // 2. Space change grace period (ignore noise for 1.5s after space change)
-        // macOS Sequoia often fires spurious "Destroyed" notifications for all windows 
-        // immediately when a space change starts.
         if Date().timeIntervalSince(lastSpaceChangeDate) < 1.5 {
             Settings.shared.log("Ignoring \(notification) for \(app.localizedName ?? "app") during space transition noise.")
             return
@@ -398,21 +384,14 @@ class WindowWatcher {
 
         // Electron-based apps need more time
         let isElectron = self.isElectronApp(app)
-        let bundleID = app.bundleIdentifier?.lowercased() ?? ""
         
-        // High-sensitivity apps get extra protection
-        let isUltraProtected = bundleID.contains("antigravity") || 
-                               bundleID.contains("vscode") || 
-                               bundleID.contains("visualstudio") ||
-                               bundleID.contains("github.GitHubClient")
-
         let baseDelay = isClosed ? 0.4 : 0.8
-        let safetyMultiplier = isUltraProtected ? 4.0 : (isElectron ? 2.0 : 1.0)
-        var totalDelay = baseDelay * safetyMultiplier
+        var totalDelay = baseDelay * (isElectron ? 2.0 : 1.5)
         
+        // Grace period during space change is now generous for ALL apps
         if Date().timeIntervalSince(lastSpaceChangeDate) < 5.0 {
-            totalDelay = isUltraProtected ? 15.0 : (isElectron ? 10.0 : 6.0)
-            Settings.shared.log("Deferring check for \(app.localizedName ?? "app") due to recent space change (UltraProtected: \(isUltraProtected))")
+            totalDelay = 15.0 
+            Settings.shared.log("Deferring check for \(app.localizedName ?? "app") due to recent space transition.")
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) { [weak self] in
@@ -442,14 +421,17 @@ class WindowWatcher {
 
         // Safety: If a space change just happened, wait significantly longer
         if Date().timeIntervalSince(lastSpaceChangeDate) < 2.0 {
-            Settings.shared.log("Space change detected during check for \(appName). Re-scheduling with delay.")
+            // Anti-spam: only log once every 2 seconds per app
+            if Date().timeIntervalSince(lastCheckTimes[pid] ?? .distantPast) > 2.0 {
+                Settings.shared.log("Space transition in progress. Re-scheduling check for \(appName).")
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
                 self?.checkAndQuit(app: app)
             }
             return
         }
 
-        // AX Calls can sometimes block if an app is beachballing, but we must use background carefully
+        // AX Calls can sometimes block
         queue.async { [weak self] in
             guard let self = self else { return }
             
@@ -491,19 +473,10 @@ class WindowWatcher {
                 self.pendingQuits[pid]?.cancel()
                 
                 let isElectron = self.isElectronApp(app)
-                let bundleID = app.bundleIdentifier?.lowercased() ?? ""
-                let isUltraProtected = bundleID.contains("antigravity") || 
-                                       bundleID.contains("vscode") || 
-                                       bundleID.contains("visualstudio")
-                
                 let isAppCurrentlyActive = app.isActive
-                // Standard apps 1s, Electron 2s, UltraProtected 5s extra
-                let extraDelay = (isAppCurrentlyActive ? 2.5 : 0.0) + (isUltraProtected ? 6.0 : (isElectron ? 1.5 : 1.0))
-                let totalDelay = Settings.shared.closeDelay + extraDelay
-                
-                if isAppCurrentlyActive || isElectron {
-                    Settings.shared.log("App \(appName) needs more time (Active: \(isAppCurrentlyActive), Electron: \(isElectron), UltraProtected: \(isUltraProtected)). Total delay: \(totalDelay)s")
-                }
+                // Slightly more responsive delays
+                let extraDelay = (isAppCurrentlyActive ? 2.5 : 0.5) + (isElectron ? 2.0 : 1.0)
+                let totalDelay = 1.5 + extraDelay
                 
                 let workItem = DispatchWorkItem { [weak self] in
                     guard let self = self else { return }
@@ -523,17 +496,17 @@ class WindowWatcher {
             return
         }
 
-        // Final window count check on background queue to avoid freezing Quitty
+        // Final window count check
         queue.async {
-            // Safety: Check space change AGAIN on the background queue
-            let bundleID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier?.lowercased() ?? ""
-            let isHighPriority = bundleID.contains("antigravity") || bundleID.contains("vscode")
-            let lockTime = isHighPriority ? 10.0 : 5.0
+            // During space transitions, treat ALL apps with maximum caution
+            let lockTime = 12.0
             
             if Date().timeIntervalSince(self.lastSpaceChangeDate) < lockTime {
-                Settings.shared.log("Aborting final check for \(appName) - space transition grace period (\(lockTime)s).")
-                DispatchQueue.main.async {
+                Settings.shared.log("Space transition still active (\(Int(12.0 - Date().timeIntervalSince(self.lastSpaceChangeDate)))s remaining). Postponing final check for \(appName).")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                    guard let self = self, let app = NSRunningApplication(processIdentifier: pid) else { return }
                     self.pendingQuits.removeValue(forKey: pid)
+                    self.checkAndQuit(app: app)
                 }
                 return
             }
@@ -560,7 +533,6 @@ class WindowWatcher {
             
             if count == 0 {
                 // LAST STAND: Cross-verify with low-level CGWindowList.
-                // This is immune to AX tree fluctuations and covers all Spaces.
                 if self.isActualWindowPresent(pid: pid) {
                     Settings.shared.log("AX reported 0 but CGWindowList found windows for \(appName). Aborting.")
                     DispatchQueue.main.async {
@@ -584,7 +556,6 @@ class WindowWatcher {
     }
 
     /// High-reliability window check using the Window Server's direct list.
-    /// This works even if the app is beachballing or windows are on other Spaces.
     private func isActualWindowPresent(pid: pid_t) -> Bool {
         let options = CGWindowListOption(arrayLiteral: .excludeDesktopElements, .optionAll)
         guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
@@ -596,59 +567,57 @@ class WindowWatcher {
         for window in windowList {
             guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t, ownerPID == pid else { continue }
             
-            // Layer 0 is the standard window layer
-            guard let layer = window[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+            // Layer check: Most standard windows are Layer 0.
+            // We allow up to Layer 50 to catch specialized UI/Terminal windows.
+            guard let layer = window[kCGWindowLayer as String] as? Int, (0...50).contains(layer) else { continue }
             
-            // Onscreen check
-            // CRITICAL: Electron windows can report isOnScreen = false during space transitions 
-            // even if they should still exist. We relax this for Electron.
-            let isOnScreen = window[kCGWindowIsOnscreen as String] as? Bool ?? false
-            if !isOnScreen && !isElectron { continue }
-
-            // Alpha check (Exclude invisible background workers)
+            // Alpha check
             let alpha = window[kCGWindowAlpha as String] as? Double ?? 0
-            if alpha < 0.01 { continue }
             
-            // Size check: Ignore tiny tracking pixels or thin lines (Separator etc)
-            if let bounds = window[kCGWindowBounds as String] as? [String: Any],
-               let width = bounds["Width"] as? CGFloat, let height = bounds["Height"] as? CGFloat {
-                
-                // Real windows are typically larger.
-                if width > 40 && height > 40 {
-                    let name = window[kCGWindowName as String] as? String ?? ""
-                    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    
-                    // Ignore known system proxies/ghosts
-                    if ["Touch Bar", "Focus Proxy", "Item Status", "Emoji & Symbols", "FocusProxy"].contains(trimmedName) {
-                        continue
-                    }
-                    
-                    if !trimmedName.isEmpty { return true }
-                    
-                    // UNNAMED WINDOW LOGIC (Crucial for Electron & cross-space stability)
-                    if trimmedName.isEmpty {
-                        if width < 150 || height < 150 { continue }
-                        
-                        // Universal Ghost Sizes
-                        let isGhostSize = (abs(width - 500) < 30 && abs(height - 500) < 30) || 
-                                          (abs(width - 600) < 30 && abs(height - 600) < 30) ||
-                                          (abs(width - 692) < 25 && abs(height - 413) < 25) ||
-                                          (abs(width - 960) < 60 && abs(height - 660) < 60)
-                        if isGhostSize { continue }
-                        
-                        let isOnScreen = window[kCGWindowIsOnscreen as String] as? Bool ?? false
-                        if isOnScreen {
-                            // Unnamed windows on current screen are likely background helpers (since AX said 0)
-                            continue
-                        } else {
-                            // Unnamed window on ANOTHER space: we must protect it to prevent cross-space mis-kill
-                            if width > 300 && height > 300 {
-                                Settings.shared.log("   -> [isActualWindowPresent] Protected cross-space window: \(Int(width))x\(Int(height)) for \(pid)")
-                                return true
-                            }
-                        }
-                    }
+            // Size check
+            let bounds = window[kCGWindowBounds as String] as? [String: Any]
+            let width = bounds?["Width"] as? CGFloat ?? 0
+            let height = bounds?["Height"] as? CGFloat ?? 0
+
+            // Log suspected ghosts that we are skipping
+            if (width > 40 && height > 40) && (alpha < 0.01 || layer > 50) {
+                Settings.shared.log("   -> [isActualWindowPresent] Skipping suspected ghost: PID=\(pid), Layer=\(layer), Alpha=\(alpha), Size=\(Int(width))x\(Int(height))")
+            }
+
+            if alpha < 0.01 { continue }
+            if width <= 40 || height <= 40 { continue }
+
+            let name = window[kCGWindowName as String] as? String ?? ""
+            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Ignore system proxies
+            if ["Touch Bar", "Focus Proxy", "Item Status", "Emoji & Symbols", "FocusProxy"].contains(trimmedName) {
+                continue
+            }
+            
+            if !trimmedName.isEmpty { return true }
+            
+            // UNNAMED WINDOW LOGIC
+            if width < 150 || height < 150 { continue }
+            
+            // Universal Ghost Sizes
+            let isGhostSize = (abs(width - 500) < 30 && abs(height - 500) < 30) || 
+                              (abs(width - 600) < 30 && abs(height - 600) < 30) ||
+                              (abs(width - 692) < 25 && abs(height - 413) < 25) ||
+                              (abs(width - 960) < 60 && abs(height - 660) < 60) ||
+                              (abs(width - 1040) < 20 && abs(height - 1040) < 20)
+            if isGhostSize { continue }
+            
+            let isOnScreen = window[kCGWindowIsOnscreen as String] as? Bool ?? false
+            if !isOnScreen {
+                // Window on another space
+                if width > 400 && height > 400 {
+                    Settings.shared.log("   -> [isActualWindowPresent] Found window for \(pid) on another space (\(Int(width))x\(Int(height)))")
+                    return true
                 }
+            } else {
+                // Unnamed but onscreen and large? Probably a background panel we should skip if AX said 0.
+                continue
             }
         }
         return false
@@ -656,30 +625,9 @@ class WindowWatcher {
 
     private func isElectronApp(_ app: NSRunningApplication) -> Bool {
         guard let bundleID = app.bundleIdentifier?.lowercased() else { return false }
-        
-        // Common Electron and VS Code variants
-        let electronKeywords = [
-            "vscode",
-            "visualstudio",
-            "antigravity",
-            "electron",
-            "discord",
-            "slack",
-            "cursor",
-            "obsidian",
-            "linear",
-            "notion"
-        ]
-        
-        if electronKeywords.contains(where: { bundleID.contains($0) }) {
-            return true
-        }
-        
-        // Also check if it's likely a custom Electron build (often in path)
-        if let path = app.bundleURL?.path.lowercased(), path.contains("electron") {
-            return true
-        }
-        
+        let electronKeywords = ["vscode", "visualstudio", "antigravity", "electron", "discord", "slack", "cursor", "obsidian", "linear", "notion", "term"]
+        if electronKeywords.contains(where: { bundleID.contains($0) }) { return true }
+        if let path = app.bundleURL?.path.lowercased(), path.contains("electron") { return true }
         return false
     }
 }

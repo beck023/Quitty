@@ -39,7 +39,6 @@ class Settings: ObservableObject {
         case menubarIconEnabled = "menubarIconEnabled"
         case excludeBehaviour   = "excludeBehaviour"
         case excludedApps       = "excludedApps"
-        case closeDelay         = "closeDelay"
         case launchAtLogin      = "launchAtLogin"
         case appLanguage        = "appLanguage"
         case fileSyncEnabled    = "fileSyncEnabled"
@@ -99,7 +98,6 @@ class Settings: ObservableObject {
             Key.menubarIconEnabled.rawValue: menubarIconEnabled,
             Key.excludeBehaviour.rawValue: excludeBehaviour,
             Key.excludedApps.rawValue: excludedApps,
-            Key.closeDelay.rawValue: closeDelay,
             Key.appLanguage.rawValue: appLanguage
         ]
         
@@ -125,7 +123,6 @@ class Settings: ObservableObject {
                 if let v = json[Key.menubarIconEnabled.rawValue] as? Bool { defaults.set(v, forKey: Key.menubarIconEnabled.rawValue) }
                 if let v = json[Key.excludeBehaviour.rawValue] as? String { defaults.set(v, forKey: Key.excludeBehaviour.rawValue) }
                 if let v = json[Key.excludedApps.rawValue] as? [String] { defaults.set(v, forKey: Key.excludedApps.rawValue) }
-                if let v = json[Key.closeDelay.rawValue] as? Double { defaults.set(v, forKey: Key.closeDelay.rawValue) }
                 if let v = json[Key.appLanguage.rawValue] as? String { defaults.set(v, forKey: Key.appLanguage.rawValue) }
                 
                 print("Settings loaded from file: \(fileURL.path)")
@@ -232,14 +229,6 @@ class Settings: ObservableObject {
         }
     }
 
-    var closeDelay: Double {
-        get { defaults.object(forKey: Key.closeDelay.rawValue) as? Double ?? 2.0 }
-        set { 
-            objectWillChange.send()
-            defaults.set(newValue, forKey: Key.closeDelay.rawValue)
-            saveToFile()
-        }
-    }
 
     var launchAtLogin: Bool {
         get { defaults.object(forKey: Key.launchAtLogin.rawValue) as? Bool ?? false }
