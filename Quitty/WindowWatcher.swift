@@ -47,6 +47,7 @@ class WindowWatcher {
     private var lastHookTimes: [pid_t: Date] = [:] // When we started watching this app
     private var lastCheckTimes: [pid_t: Date] = [:] // Anti-spam for checkAndQuit
     private var lastSpaceChangeDate = Date.distantPast
+    private var refreshTimer: Timer?
     private let queue = DispatchQueue(label: "com.quitty.watcher", qos: .userInitiated, attributes: .concurrent)
 
     var observerCount: Int {
@@ -60,6 +61,13 @@ class WindowWatcher {
         // Watch all currently running apps, but wait a bit for system to settle
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.refreshAllApps()
+        }
+        
+        // Start a low-frequency backup timer to catch any missed closure events
+        DispatchQueue.main.async {
+            self.refreshTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { [weak self] _ in
+                self?.periodicCheck()
+            }
         }
     }
 
@@ -85,6 +93,9 @@ class WindowWatcher {
 
             NotificationCenter.default.removeObserver(self)
             NSWorkspace.shared.notificationCenter.removeObserver(self)
+            
+            self.refreshTimer?.invalidate()
+            self.refreshTimer = nil
         }
     }
 
@@ -132,6 +143,22 @@ class WindowWatcher {
         self.observerContexts.removeValue(forKey: pid)
         self.pendingQuits[pid]?.cancel()
         self.pendingQuits.removeValue(forKey: pid)
+    }
+
+    private func periodicCheck() {
+        let activeApps = NSWorkspace.shared.runningApplications
+        for app in activeApps {
+            guard Settings.shared.isPotentiallyRelevant(bundlePath: app.bundleURL?.path, bundleID: app.bundleIdentifier) else { continue }
+            
+            // Only periodically check apps we are already watching and that are NOT active
+            let pid = app.processIdentifier
+            if observers[pid] != nil && !app.isActive && !app.isHidden {
+                // If it's been armed at some point but currently reports 0 windows, trigger a check
+                if armedPids.contains(pid) {
+                    self.checkAndQuit(app: app)
+                }
+            }
+        }
     }
 
     // MARK: - NSWorkspace Notifications
@@ -369,15 +396,23 @@ class WindowWatcher {
 
         Settings.shared.log("Received \(notification) for \(app.localizedName ?? "app") (PID: \(pid))")
 
-        // Electron-based apps (VS Code, Discord, etc) need more time to stabilize
+        // Electron-based apps need more time
         let isElectron = self.isElectronApp(app)
+        let bundleID = app.bundleIdentifier?.lowercased() ?? ""
+        
+        // High-sensitivity apps get extra protection
+        let isUltraProtected = bundleID.contains("antigravity") || 
+                               bundleID.contains("vscode") || 
+                               bundleID.contains("visualstudio") ||
+                               bundleID.contains("github.GitHubClient")
+
         let baseDelay = isClosed ? 0.4 : 0.8
-        let safetyMultiplier = isElectron ? 2.0 : 1.0
+        let safetyMultiplier = isUltraProtected ? 4.0 : (isElectron ? 2.0 : 1.0)
         var totalDelay = baseDelay * safetyMultiplier
         
         if Date().timeIntervalSince(lastSpaceChangeDate) < 5.0 {
-            totalDelay = isElectron ? 10.0 : 6.0
-            Settings.shared.log("Deferring check for \(app.localizedName ?? "app") due to recent space change (Electron: \(isElectron))")
+            totalDelay = isUltraProtected ? 15.0 : (isElectron ? 10.0 : 6.0)
+            Settings.shared.log("Deferring check for \(app.localizedName ?? "app") due to recent space change (UltraProtected: \(isUltraProtected))")
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) { [weak self] in
@@ -455,14 +490,19 @@ class WindowWatcher {
             DispatchQueue.main.async {
                 self.pendingQuits[pid]?.cancel()
                 
-                // Electron apps get even more safety time on the final countdown
                 let isElectron = self.isElectronApp(app)
+                let bundleID = app.bundleIdentifier?.lowercased() ?? ""
+                let isUltraProtected = bundleID.contains("antigravity") || 
+                                       bundleID.contains("vscode") || 
+                                       bundleID.contains("visualstudio")
+                
                 let isAppCurrentlyActive = app.isActive
-                let extraDelay = (isAppCurrentlyActive ? 1.5 : 0.0) + (isElectron ? 1.0 : 0.0)
+                // Standard apps 1s, Electron 2s, UltraProtected 5s extra
+                let extraDelay = (isAppCurrentlyActive ? 2.5 : 0.0) + (isUltraProtected ? 6.0 : (isElectron ? 1.5 : 1.0))
                 let totalDelay = Settings.shared.closeDelay + extraDelay
                 
                 if isAppCurrentlyActive || isElectron {
-                    Settings.shared.log("App \(appName) needs more time (Active: \(isAppCurrentlyActive), Electron: \(isElectron)). Total delay: \(totalDelay)s")
+                    Settings.shared.log("App \(appName) needs more time (Active: \(isAppCurrentlyActive), Electron: \(isElectron), UltraProtected: \(isUltraProtected)). Total delay: \(totalDelay)s")
                 }
                 
                 let workItem = DispatchWorkItem { [weak self] in
@@ -486,8 +526,12 @@ class WindowWatcher {
         // Final window count check on background queue to avoid freezing Quitty
         queue.async {
             // Safety: Check space change AGAIN on the background queue
-            if Date().timeIntervalSince(self.lastSpaceChangeDate) < 5.0 {
-                Settings.shared.log("Aborting final check for \(appName) - space change detected within 5s grace period.")
+            let bundleID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier?.lowercased() ?? ""
+            let isHighPriority = bundleID.contains("antigravity") || bundleID.contains("vscode")
+            let lockTime = isHighPriority ? 10.0 : 5.0
+            
+            if Date().timeIntervalSince(self.lastSpaceChangeDate) < lockTime {
+                Settings.shared.log("Aborting final check for \(appName) - space transition grace period (\(lockTime)s).")
                 DispatchQueue.main.async {
                     self.pendingQuits.removeValue(forKey: pid)
                 }
@@ -569,20 +613,41 @@ class WindowWatcher {
             if let bounds = window[kCGWindowBounds as String] as? [String: Any],
                let width = bounds["Width"] as? CGFloat, let height = bounds["Height"] as? CGFloat {
                 
-                // Real windows are typically larger and HAVE A TITLE.
-                // Electron apps often keep a 500x500 or similar 'Unnamed' hidden window.
+                // Real windows are typically larger.
                 if width > 40 && height > 40 {
                     let name = window[kCGWindowName as String] as? String ?? ""
                     let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                     
-                    // If it's an Electron app and has no title, it's almost certainly a background helper.
-                    // We only block quit if there's a window with an actual title.
-                    if isElectron && trimmedName.isEmpty {
+                    // Ignore known system proxies/ghosts
+                    if ["Touch Bar", "Focus Proxy", "Item Status", "Emoji & Symbols", "FocusProxy"].contains(trimmedName) {
                         continue
                     }
                     
-                    Settings.shared.log("   -> [isActualWindowPresent] Found window: \(trimmedName.isEmpty ? "Unnamed" : name) (\(Int(width))x\(Int(height))) for \(pid)")
-                    return true
+                    if !trimmedName.isEmpty { return true }
+                    
+                    // UNNAMED WINDOW LOGIC (Crucial for Electron & cross-space stability)
+                    if trimmedName.isEmpty {
+                        if width < 150 || height < 150 { continue }
+                        
+                        // Universal Ghost Sizes
+                        let isGhostSize = (abs(width - 500) < 30 && abs(height - 500) < 30) || 
+                                          (abs(width - 600) < 30 && abs(height - 600) < 30) ||
+                                          (abs(width - 692) < 25 && abs(height - 413) < 25) ||
+                                          (abs(width - 960) < 60 && abs(height - 660) < 60)
+                        if isGhostSize { continue }
+                        
+                        let isOnScreen = window[kCGWindowIsOnscreen as String] as? Bool ?? false
+                        if isOnScreen {
+                            // Unnamed windows on current screen are likely background helpers (since AX said 0)
+                            continue
+                        } else {
+                            // Unnamed window on ANOTHER space: we must protect it to prevent cross-space mis-kill
+                            if width > 300 && height > 300 {
+                                Settings.shared.log("   -> [isActualWindowPresent] Protected cross-space window: \(Int(width))x\(Int(height)) for \(pid)")
+                                return true
+                            }
+                        }
+                    }
                 }
             }
         }
