@@ -30,3 +30,4 @@ DerivedData
 ExportOptions.plist
 package.sh
 RELEASE_GUIDE.md
+dist/
