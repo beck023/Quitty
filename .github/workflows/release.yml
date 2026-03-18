@@ -14,7 +14,7 @@ jobs:
 
       - name: Install Sparkle tools
         run: |
-          SPARKLE_URL=$(curl -s https://api.github.com/repos/sparkle-project/Sparkle/releases/latest | jq -r '.assets[] | select(.name | endswith(".tar.xz")) | .browser_download_url' | head -n 1)
+          SPARKLE_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/sparkle-project/Sparkle/releases/latest | jq -r '.assets[] | select(.name | endswith(".tar.xz")) | .browser_download_url' | head -n 1)
           echo "SPARKLE_URL=$SPARKLE_URL"
           if [ -z "$SPARKLE_URL" ] || [ "$SPARKLE_URL" == "null" ]; then
             echo "❌ Failed to fetch Sparkle URL"
