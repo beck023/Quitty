@@ -14,8 +14,8 @@ DMG_PATH="${RESULT_DIR}/${DMG_NAME}"
 
 # --- Check for Notarization Credentials ---
 # You can set these environment variables globally or replace them here
-APPLE_ID="${APPLE_ID:-chentao1006@icloud.com}"
-APPLE_PASSWORD="${APPLE_PASSWORD:-mqcw-ybyc-ksis-vvny}"
+APPLE_ID="${APPLE_ID}"
+APPLE_PASSWORD="${APPLE_PASSWORD}"
 SPARKLE_BIN_PATH="${SPARKLE_BIN_PATH:-./Sparkle/bin}" # Path to generate_appcast
 
 set -e
