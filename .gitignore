@@ -30,7 +30,7 @@ DerivedData
 ExportOptions.plist
 RELEASE_GUIDE.md
 dist/
-sparkle_tool/
+Sparkle/
 sparkle_private.key
 sparkle.tar.xz
 
