@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Sparkle tools
+        run: |
+          # Use homebrew or download Sparkle binary
+          # For generate_appcast, we might need the full Sparkle distribution
+          # But for now, let's assume we can use a simpler method or the user will handle it.
+          # Actually, we can download Sparkle's latest release and extract the bin.
+          SPARKLE_URL=$(curl -s https://api.github.com/repos/sparkle-project/Sparkle/releases/latest | grep "browser_download_url.*Sparkle-.*.tar.xz" | cut -d : -f 2,3 | tr -d \")
+          curl -L -o sparkle.tar.xz $SPARKLE_URL
+          mkdir sparkle_dist
+          tar -xf sparkle.tar.xz -C sparkle_dist
+
+      - name: Import Apple Certificate
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          # Import P12
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode > certificate.p12
+          security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          # Cleanup file
+          rm certificate.p12
+
+      - name: Build and Package
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          # Use the existing package.sh or inline its logic
+          # Ensure package.sh doesn't have hardcoded credentials or handles being passed them
+          chmod +x package.sh
+          ./package.sh
+
+      - name: Generate Sparkle Appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          # Use generate_appcast from the downloaded Sparkle dist
+          ./sparkle_dist/bin/generate_appcast ./dist
+          
+          # If a private key is provided, sign the update
+          if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+            # You might need to use sign_update tool
+            echo "Signing update not fully automated in this script yet, please ensure SPARKLE_PRIVATE_KEY is in keychain or passed to generate_appcast"
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+      - name: Upload DMG to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/Quitty.dmg
+          asset_name: Quitty.dmg
+          asset_content_type: application/octet-stream
+
+      - name: Upload Appcast to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/appcast.xml
+          asset_name: appcast.xml
+          asset_content_type: application/xml
