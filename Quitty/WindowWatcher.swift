@@ -324,7 +324,7 @@ class WindowWatcher {
             guard let self = self else { return }
             let axApp = AXUIElementCreateApplication(pid)
             var windows: CFTypeRef?
-            let result = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windows)
+            _ = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windows)
             
             let list = windows as? [AXUIElement] ?? []
             let validWindows = list.filter { window in

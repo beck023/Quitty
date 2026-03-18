@@ -57,56 +57,110 @@ struct GeneralSettingsView: View {
     @ObservedObject var settings: Settings
     
     var body: some View {
-        Form {
-            Section {
-                Toggle(settings.localizedString("launch_at_login"), isOn: $settings.launchAtLogin)
-                Toggle(settings.localizedString("launch_hidden"), isOn: $settings.launchHidden)
-                Toggle(settings.localizedString("show_menubar_icon"), isOn: $settings.menubarIconEnabled)
-                
-                Picker(settings.localizedString("language"), selection: $settings.appLanguage) {
-                    Text(settings.localizedString("lang_system")).tag("system")
-                    Text(settings.localizedString("lang_en")).tag("en")
-                    Text(settings.localizedString("lang_zh")).tag("zh")
-                }
-            } header: {
-                Text(settings.localizedString("section_general"))
-            }
-            
-
-            Section {
-                HStack {
-                    Text(settings.localizedString("accessibility_access"))
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(settings.isAccessibilityAuthorized ? Color.green : Color.red)
-                            .frame(width: 8, height: 8)
-                        Text(settings.localizedString(settings.isAccessibilityAuthorized ? "status_authorized" : "status_unauthorized"))
-                            .foregroundColor(.secondary)
+        #if os(macOS)
+        if #available(macOS 13.0, *) {
+            Form {
+                Section {
+                    Toggle(settings.localizedString("launch_at_login"), isOn: $settings.launchAtLogin)
+                    Toggle(settings.localizedString("launch_hidden"), isOn: $settings.launchHidden)
+                    Toggle(settings.localizedString("show_menubar_icon"), isOn: $settings.menubarIconEnabled)
+                    
+                    Picker(settings.localizedString("language"), selection: $settings.appLanguage) {
+                        Text(settings.localizedString("lang_system")).tag("system")
+                        Text(settings.localizedString("lang_en")).tag("en")
+                        Text(settings.localizedString("lang_zh")).tag("zh")
                     }
+                } header: {
+                    Text(settings.localizedString("section_general"))
                 }
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    Button(settings.localizedString(settings.isAccessibilityAuthorized ? "btn_check" : "btn_grant")) {
-                        if let delegate = NSApplication.shared.delegate as? AppDelegate {
-                            delegate.checkAccessibilityPermissions(silent: false)
-                            settings.objectWillChange.send()
+
+                Section {
+                    HStack {
+                        Text(settings.localizedString("accessibility_access"))
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(settings.isAccessibilityAuthorized ? Color.green : Color.red)
+                                .frame(width: 8, height: 8)
+                            Text(settings.localizedString(settings.isAccessibilityAuthorized ? "status_authorized" : "status_unauthorized"))
+                                .foregroundColor(.secondary)
                         }
                     }
                     
-                    if !settings.isAccessibilityAuthorized {
-                        Text(settings.localizedString("permission_desc"))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button(settings.localizedString(settings.isAccessibilityAuthorized ? "btn_check" : "btn_grant")) {
+                            if let delegate = NSApplication.shared.delegate as? AppDelegate {
+                                delegate.checkAccessibilityPermissions(silent: false)
+                                settings.objectWillChange.send()
+                            }
+                        }
+                        
+                        if !settings.isAccessibilityAuthorized {
+                            Text(settings.localizedString("permission_desc"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text(settings.localizedString("section_permissions"))
                 }
-                .padding(.vertical, 4)
-            } header: {
-                Text(settings.localizedString("section_permissions"))
+            }
+            .formStyle(.grouped)
+        } else {
+            Form {
+                Section {
+                    Toggle(settings.localizedString("launch_at_login"), isOn: $settings.launchAtLogin)
+                    Toggle(settings.localizedString("launch_hidden"), isOn: $settings.launchHidden)
+                    Toggle(settings.localizedString("show_menubar_icon"), isOn: $settings.menubarIconEnabled)
+                    
+                    Picker(settings.localizedString("language"), selection: $settings.appLanguage) {
+                        Text(settings.localizedString("lang_system")).tag("system")
+                        Text(settings.localizedString("lang_en")).tag("en")
+                        Text(settings.localizedString("lang_zh")).tag("zh")
+                    }
+                } header: {
+                    Text(settings.localizedString("section_general"))
+                }
+                
+
+                Section {
+                    HStack {
+                        Text(settings.localizedString("accessibility_access"))
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(settings.isAccessibilityAuthorized ? Color.green : Color.red)
+                                .frame(width: 8, height: 8)
+                            Text(settings.localizedString(settings.isAccessibilityAuthorized ? "status_authorized" : "status_unauthorized"))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button(settings.localizedString(settings.isAccessibilityAuthorized ? "btn_check" : "btn_grant")) {
+                            if let delegate = NSApplication.shared.delegate as? AppDelegate {
+                                delegate.checkAccessibilityPermissions(silent: false)
+                                settings.objectWillChange.send()
+                            }
+                        }
+                        
+                        if !settings.isAccessibilityAuthorized {
+                            Text(settings.localizedString("permission_desc"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text(settings.localizedString("section_permissions"))
+                }
             }
         }
-        .formStyle(.grouped)
+        #endif
     }
 }
 
@@ -328,12 +382,22 @@ struct DataSettingsView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             VStack(alignment: .leading, spacing: 0) {
-                                Text(settings.logs.joined(separator: "\n"))
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                                    .textSelection(.enabled)
-                                    .padding(8)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                #if os(macOS)
+                                if #available(macOS 12.0, *) {
+                                    Text(settings.logs.joined(separator: "\n"))
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                        .textSelection(.enabled)
+                                        .padding(8)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                } else {
+                                    Text(settings.logs.joined(separator: "\n"))
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                        .padding(8)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                #endif
                                 
                                 Color.clear
                                     .frame(height: 1)
@@ -368,7 +432,6 @@ struct DataSettingsView: View {
                 Text(settings.localizedString("section_logs"))
             }
         }
-        .formStyle(.grouped)
     }
     
     private func chooseSyncPath() {
