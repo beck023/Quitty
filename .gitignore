@@ -27,3 +27,6 @@ DerivedData
 
 # Project specifics
 /Release
+ExportOptions.plist
+package.sh
+RELEASE_GUIDE.md

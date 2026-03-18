@@ -7,7 +7,7 @@
 在开始打包前，请确保你拥有以下信息：
 - **Apple ID**: 你的开发者账号邮箱。
 - **App-Specific Password**: 专用密码。需在 [appleid.apple.com](https://appleid.apple.com) 生成（格式类似 `xxxx-xxxx-xxxx-xxxx`）。
-- **Team ID**: `E3237SRTMX` (已配置在脚本中)。
+- **Team ID**: `YL5Z93AN2M` (已配置在脚本中)。
 - **Certificate**: 确保 Xcode 中已安装 **Developer ID Application** 证书。
 
 ## 2. 自动化工具
@@ -41,7 +41,7 @@ export APPLE_PASSWORD="你的App专用密码"
 - **公证失败 (Invalid)**: 
   如果你收到邮件说公证失败，可以使用脚本输出的 `Submission ID` 查看详情：
   ```bash
-  xcrun notarytool log <SUBMISSION_ID> --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "E3237SRTMX"
+  xcrun notarytool log <SUBMISSION_ID> --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "YL5Z93AN2M"
   ```
 - **证书错误**: 
   如果提示找不到 `Developer ID Application` 证书，请在 Xcode -> Settings -> Accounts -> Manage Certificates 中添加。

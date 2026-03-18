@@ -4,7 +4,7 @@
 PROJECT_NAME="Quitty"
 SCHEME="Quitty"
 BUNDLE_ID="com.ct106.quitty"
-TEAM_ID="E3237SRTMX" # Found in your project
+TEAM_ID="YL5Z93AN2M" # Found in your project
 APP_NAME="${PROJECT_NAME}.app"
 RESULT_DIR="./dist"
 ARCHIVE_PATH="${RESULT_DIR}/${PROJECT_NAME}.xcarchive"
