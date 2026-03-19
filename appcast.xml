@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Quitty</title>
+        <item>
+            <title>1.0.6</title>
+            <pubDate>Thu, 19 Mar 2026 09:37:56 +0800</pubDate>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>11.5</sparkle:minimumSystemVersion>
+            <enclosure url="https://chentao1006.github.io/Quitty/Quitty.dmg" length="3742342" type="application/octet-stream" sparkle:edSignature="jNBQHTQ96n6bWOhtSj3U9kh9CUVtDApCDKrypo7oke74z7FfgS78Mt8cvmbwhHwaFe+mFny2rwcem+35hKCEAA=="/>
+        </item>
+    </channel>
+</rss>

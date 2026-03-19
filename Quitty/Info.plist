@@ -21,7 +21,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.6</string>
 	<key>CFBundleVersion</key>
-	<string>7</string>
+	<string>8</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
@@ -33,7 +33,7 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>SUFeedURL</key>
-	<string>https://chentao1006.github.io/quitty/appcast.xml</string>
+	<string>https://chentao1006.github.io/Quitty/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>T9d+4vUpmrkAXNcwSOu7/MzSO6tIKr8JbVhYe4j0jaE=</string>
 </dict>
