@@ -81,6 +81,24 @@ if [ ! -d "${EXPORTED_APP}" ]; then
     exit 1
 fi
 
+# --- NEW: Notarize and Staple the .app itself BEFORE putting it in DMG ---
+if [ -n "$APPLE_ID" ] && [ -n "$APPLE_PASSWORD" ]; then
+    echo "🔐 Notarizing the .app bundle directly..."
+    # Zip the app for notarization
+    rm -f "${RESULT_DIR}/Quitty_app.zip"
+    /usr/bin/ditto -c -k --keepParent "${EXPORTED_APP}" "${RESULT_DIR}/Quitty_app.zip"
+    
+    xcrun notarytool submit "${RESULT_DIR}/Quitty_app.zip" \
+        --apple-id "${APPLE_ID}" \
+        --password "${APPLE_PASSWORD}" \
+        --team-id "${TEAM_ID}" \
+        --wait
+    
+    echo "🖋️ Stapling notarization ticket to the .app..."
+    xcrun stapler staple "${EXPORTED_APP}"
+    rm -f "${RESULT_DIR}/Quitty_app.zip"
+fi
+
 # 4. Create DMG
 echo "💿 Creating DMG..."
 # Simple DMG creation using hdiutil

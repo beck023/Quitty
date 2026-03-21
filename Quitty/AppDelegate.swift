@@ -58,8 +58,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Check accessibility permissions and start watching
-        if checkAccessibilityPermissions() {
+        // At login, the accessibility system might take a few seconds to load.
+        // We retry after a short delay if it initially fails.
+        if checkAccessibilityPermissions(silent: true) {
             startWatcher()
+        } else {
+            Settings.shared.log("Initial accessibility check failed. Retrying in 5s (system startup delay?)...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                if self?.checkAccessibilityPermissions(silent: true) == true {
+                    Settings.shared.log("Retry success: permissions found!")
+                    self?.startWatcher()
+                } else if !settings.launchHidden {
+                    // Only prompt if we still fail AND we're supposed to show UI
+                    self?.checkAccessibilityPermissions(silent: false)
+                }
+            }
         }
 
         // Listen for settings updates (like language change) to refresh menu
