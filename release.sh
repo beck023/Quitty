@@ -34,12 +34,8 @@ if [ -z "$NEW_VERSION" ]; then
     exit 1
 fi
 
-# Determine NEW_BUILD
-if [[ "$NEW_VERSION" != "$CURRENT_VERSION" ]]; then
-    NEW_BUILD=1
-else
-    NEW_BUILD=$((CURRENT_BUILD + 1))
-fi
+# Determine NEW_BUILD (Always increment to ensure Sparkle compatibility)
+NEW_BUILD=$((CURRENT_BUILD + 1))
 
 echo "🚀 Preparing local release $NEW_VERSION (Build $NEW_BUILD)..."
 
