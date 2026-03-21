@@ -8,7 +8,7 @@
             <sparkle:version>10</sparkle:version>
             <sparkle:shortVersionString>1.0.7</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>11.5</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/chentao1006/quitty/releases/download/v1.0.7/Quitty.dmg" length="3744586" type="application/octet-stream" sparkle:edSignature="RiMjIuPLYsGN8KCE9Lt5/W/2GDquTh0rDLFWSKazRUEAWnneZ0NRf4j3hTvMLB0LMDz2tsTta2Wm1HtCT6pNAA=="/>
+            <enclosure url="https://github.com/chentao1006/quitty/releases/download/v1.0.7/Quitty.dmg" length="3744486" type="application/octet-stream" sparkle:edSignature="VpmqHRSy9pN3yHvwXjWiGwfL8LJj97etHhE/c0qOxHB15eNIwq5IckaIon6YwNblDrl0Ml59rgfNAsgMescxBw=="/>
         </item>
     </channel>
 </rss>
