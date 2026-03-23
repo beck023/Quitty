@@ -3,6 +3,14 @@
     <channel>
         <title>Quitty</title>
         <item>
+            <title>1.0.9</title>
+            <pubDate>Mon, 23 Mar 2026 12:14:38 +0800</pubDate>
+            <sparkle:version>14</sparkle:version>
+            <sparkle:shortVersionString>1.0.9</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>11.5</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/chentao1006/quitty/releases/download/v1.0.9/Quitty.dmg" length="3760304" type="application/octet-stream" sparkle:edSignature="UMVDHJxlGPmT+R6ZD6iR/0intRMRL4JpLzao9+lmoMNMNVcDH9bCrhDJZ6HoYwGX4OFFIv5OezRBBZ3knyTuAg=="/>
+        </item>
+        <item>
             <title>1.0.8</title>
             <pubDate>Sat, 21 Mar 2026 14:44:16 +0800</pubDate>
             <sparkle:version>13</sparkle:version>
