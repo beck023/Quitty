@@ -16,7 +16,7 @@
 -   **Configurable Delay**: Set a custom grace period (0-5 seconds) before an app is terminated.
 -   **Launch at Login**: Seamlessly starts with your Mac.
 -   **Adaptive Learning Engine**: Quitty learns from your feedback. If an app stays open or quits incorrectly, you can report it to help the engine adapt to that app's specific window behavior.
--   **Settings Sync**: Synchronize your settings and learned rules across machines using iCloud Drive.
+-   **iCloud Sync**: Automatically sync your settings and learned app rules across all your Macs via your iCloud account.
 -   **Crowdsourced Improvement**: Optionally report issues to contribute to a better universal detection engine for all users.
 
 ## 🛠 Installation
