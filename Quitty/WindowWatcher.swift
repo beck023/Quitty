@@ -562,7 +562,13 @@ class WindowWatcher {
             return true // Safety
         }
 
-        let isSpecial = NSRunningApplication(processIdentifier: pid).map { isSpecialCareApp($0) } ?? false
+        let app = NSRunningApplication(processIdentifier: pid)
+        let isSpecial = app.map { isSpecialCareApp($0) } ?? false
+        let appName = (app?.localizedName ?? "").lowercased()
+        let bundleID = (app?.bundleIdentifier ?? "").lowercased()
+        // Certain apps are known for persistent unnamed ghosts
+        let isGhostProne = appName.contains("handbrake") || appName.contains("termora") || 
+                           bundleID.contains("handbrake") || bundleID.contains("termora")
 
         for window in windowList {
             guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t, ownerPID == pid else { continue }
@@ -604,6 +610,10 @@ class WindowWatcher {
                               (abs(width - 692) < 25 && abs(height - 413) < 25) ||
                               (abs(width - 715) < 30 && abs(height - 364) < 30) || // Screen Sharing ghost
                               (abs(width - 735) < 30 && abs(height - 424) < 30) || // Sequel Ace ghost
+                              (abs(width - 885) < 15 && abs(height - 670) < 15) || // HandBrake ghost
+                              (abs(width - 844) < 15 && abs(height - 457) < 15) || // Windows App ghost
+                              (abs(width - 360) < 15 && abs(height - 380) < 15) || // Termora ghost
+                              (abs(width - 550) < 30 && abs(height - 420) < 50) || // Termora ghost var 1
                               (abs(width - 960) < 60 && abs(height - 660) < 60) ||
                               (abs(width - 1040) < 20 && abs(height - 1040) < 20) ||
                               (abs(width - 1291) < 20 && abs(height - 832) < 20) // Microsoft Excel ghost
@@ -613,16 +623,22 @@ class WindowWatcher {
             let isOnScreen = window[kCGWindowIsOnscreen as String] as? Bool ?? false
             if !isOnScreen {
                 // Window on another space
-                // Relaxed threshold (110x110) for cross-platform/special apps.
-                let threshold: CGFloat = isSpecial ? 110 : 250
+                // Ultra-conservative threshold for unnamed windows on other spaces.
+                // We strongly prefer "not killing" over "mistakenly killing".
+                // We only ignore these if they match known ghost sizes or are very small.
+                var threshold: CGFloat = isSpecial ? 100 : 200
+                if isGhostProne {
+                    threshold = 300 // Slightly higher for ghost-prone apps but still safe
+                }
+                
                 if width > threshold && height > threshold {
                     Settings.shared.log("   -> [isActualWindowPresent] Found window for \(pid) on another space (\(Int(width))x\(Int(height)))")
                     return true
                 }
             } else {
                 // Onscreen unnamed window
-                // Relaxed threshold (180x180) for cross-platform/special apps.
-                let threshold: CGFloat = isSpecial ? 180 : 350
+                // Even more conservative for onscreen unnamed windows.
+                let threshold: CGFloat = isSpecial ? 120 : 250
                 if width > threshold && height > threshold {
                     Settings.shared.log("   -> [isActualWindowPresent] Found unnamed onscreen window for \(pid) (\(Int(width))x\(Int(height)))")
                     return true
@@ -644,7 +660,8 @@ class WindowWatcher {
             "vscode", "visualstudio", "antigravity", "electron", "discord", 
             "slack", "cursor", "obsidian", "linear", "notion", "term", 
             "java", "jetbrains", "intellij", "warp", "termora", "tabby", 
-            "wezterm", "alacritty", "microsoft", "excel", "powerpoint", "outlook", "word"
+            "wezterm", "alacritty", "microsoft", "excel", "powerpoint", "outlook", "word",
+            "handbrake", "windows app"
         ]
         
         if specialKeywords.contains(where: { bundleID.contains($0) || appName.contains($0) }) {
