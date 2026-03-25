@@ -35,17 +35,23 @@ struct SettingsView: View {
                 }
                 .tag(1)
             
+            HistorySettingsView(settings: settings)
+                .tabItem {
+                    Label(settings.localizedString("tab_history"), systemImage: "clock.arrow.circlepath")
+                }
+                .tag(2)
+            
             DataSettingsView(settings: settings)
                 .tabItem {
                     Label(settings.localizedString("tab_data"), systemImage: "externaldrive")
                 }
-                .tag(2)
+                .tag(3)
             
             AboutSettingsView(settings: settings)
                 .tabItem {
                     Label(settings.localizedString("tab_about"), systemImage: "info.circle")
                 }
-                .tag(3)
+                .tag(4)
         }
         // Force redraw on language change AND force a wide layout to prevent collapse
         .id(settings.appLanguage)
@@ -221,7 +227,9 @@ struct AboutSettingsView: View {
 
 struct AppListSettingsView: View {
     @ObservedObject var settings: Settings
+    @ObservedObject var feedback: FeedbackEngine = .shared
     @State private var selection: String?
+    @State private var feedbackStatus: [String: String] = [:]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -240,9 +248,49 @@ struct AppListSettingsView: View {
             
             VStack(spacing: 0) {
                 List(selection: $selection) {
-                    ForEach(settings.excludedApps, id: \.self) { identifier in
-                        AppListRow(identifier: identifier)
-                            .tag(identifier)
+                    ForEach(settings.excludedApps.sorted { 
+                        resolveAppInfo(for: $0).name.localizedStandardCompare(resolveAppInfo(for: $1).name) == .orderedAscending
+                    }, id: \.self) { identifier in
+                        HStack {
+                            AppListRow(identifier: identifier)
+                            Spacer()
+                            if let status = feedbackStatus[identifier] {
+                                Text(status)
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                                    .transition(.opacity)
+                            }
+
+                            Menu {
+                                Button(settings.localizedString("btn_false_quit")) {
+                                    let info = resolveAppInfo(for: identifier)
+                                    FeedbackEngine.shared.reportFalseQuit(
+                                        bundleID: info.bundleID ?? identifier,
+                                        appName: info.name,
+                                        bundlePath: identifier.hasPrefix("/") ? identifier : nil
+                                    )
+                                    showFeedbackConfirmation(for: identifier)
+                                }
+                                Button(settings.localizedString("btn_cant_quit")) {
+                                    let info = resolveAppInfo(for: identifier)
+                                    let bundleID = info.bundleID ?? identifier
+                                    // Try to find the actual running PID
+                                    let pid = NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == bundleID }?.processIdentifier
+                                    FeedbackEngine.shared.reportCantQuit(
+                                        bundleID: bundleID,
+                                        appName: info.name,
+                                        pid: pid
+                                    )
+                                    showFeedbackConfirmation(for: identifier)
+                                }
+                            } label: {
+                                Text(settings.localizedString("btn_feedback"))
+                                    .font(.caption)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                        }
+                        .tag(identifier)
                     }
                 }
                 .listStyle(.inset)
@@ -302,6 +350,17 @@ struct AppListSettingsView: View {
         .padding()
     }
     
+    private func showFeedbackConfirmation(for identifier: String) {
+        withAnimation {
+            feedbackStatus[identifier] = settings.localizedString("feedback_reported")
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            withAnimation {
+                feedbackStatus[identifier] = nil
+            }
+        }
+    }
+    
     private func addApp() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
@@ -317,6 +376,20 @@ struct AppListSettingsView: View {
                 }
             }
         }
+    }
+    
+    private func resolveAppInfo(for id: String) -> (name: String, bundleID: String?) {
+        let ws = NSWorkspace.shared
+        if id.hasPrefix("/") {
+            let name = FileManager.default.displayName(atPath: id)
+            let bundle = Bundle(path: id)
+            return (name, bundle?.bundleIdentifier)
+        }
+        if let url = ws.urlForApplication(withBundleIdentifier: id) {
+            let name = FileManager.default.displayName(atPath: url.path)
+            return (name, id)
+        }
+        return (id, id)
     }
 }
 
@@ -343,7 +416,6 @@ struct AppListRow: View {
         
         // 1. If it's a path
         if id.hasPrefix("/") {
-            let url = URL(fileURLWithPath: id)
             let icon = ws.icon(forFile: id)
             let name = FileManager.default.displayName(atPath: id)
             return (icon, name)
@@ -521,5 +593,108 @@ struct DataSettingsView: View {
             let logContent = settings.logs.joined(separator: "\n")
             try? logContent.write(to: url, atomically: true, encoding: .utf8)
         }
+    }
+}
+
+struct HistorySettingsView: View {
+    @ObservedObject var settings: Settings
+    @ObservedObject var feedback: FeedbackEngine = .shared
+    
+    private let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm:ss"
+        return f
+    }()
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(settings.localizedString("section_history"))
+                    .font(.headline)
+                Spacer()
+                if !feedback.history.isEmpty {
+                    Button(settings.localizedString("btn_clear_history")) {
+                        feedback.history.removeAll()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.borderless)
+                }
+            }
+            
+            Text(settings.localizedString("history_desc"))
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            if feedback.history.isEmpty {
+                VStack {
+                    Spacer()
+                    Text(settings.localizedString("history_empty"))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                    Spacer()
+                }
+            } else {
+                List {
+                    ForEach(feedback.history) { record in
+                        HistoryRow(record: record, settings: settings, feedback: feedback, dateFormatter: dateFormatter)
+                    }
+                }
+                .listStyle(.inset)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
+            }
+        }
+        .padding()
+    }
+}
+
+struct HistoryRow: View {
+    let record: TerminationRecord
+    @ObservedObject var settings: Settings
+    @ObservedObject var feedback: FeedbackEngine
+    let dateFormatter: DateFormatter
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: feedback.appIcon(for: record))
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 24, height: 24)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(record.appName)
+                    .font(.body)
+                    .lineLimit(1)
+                
+                Text(dateFormatter.string(from: record.date))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            if let ft = record.feedbackType {
+                HStack(spacing: 4) {
+                    Image(systemName: ft == .falseQuit ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .foregroundColor(ft == .falseQuit ? .orange : .green)
+                        .font(.caption)
+                    Text(settings.localizedString(ft == .falseQuit ? "feedback_false_quit" : "feedback_cant_quit"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Button(settings.localizedString("btn_false_quit")) {
+                    feedback.reportFalseQuit(recordID: record.id)
+                }
+                .font(.caption)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }

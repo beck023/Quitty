@@ -12,6 +12,7 @@
 		A1000003 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* Settings.swift */; };
 		A1000004 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* SettingsWindowController.swift */; };
 		A1000005 /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* SettingsViewController.swift */; };
+		A1000007 /* FeedbackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* FeedbackEngine.swift */; };
 		A1000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000006 /* Assets.xcassets */; };
 		A1000009 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A9000000 /* Localizable.strings */; };
 		A1000010 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A9000010 /* InfoPlist.strings */; };
@@ -28,6 +29,7 @@
 		A2000006 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000008 /* Quitty.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Quitty.entitlements; sourceTree = "<group>"; };
+		A2000009 /* FeedbackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackEngine.swift; sourceTree = "<group>"; };
 		A2000011 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		A2000012 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A2000021 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
@@ -62,6 +64,7 @@
 				A2000003 /* Settings.swift */,
 				A2000004 /* SettingsWindowController.swift */,
 				A2000005 /* SettingsViewController.swift */,
+				A2000009 /* FeedbackEngine.swift */,
 				A2000006 /* Assets.xcassets */,
 				A2000007 /* Info.plist */,
 				A2000008 /* Quitty.entitlements */,
@@ -154,6 +157,7 @@
 				A1000003 /* Settings.swift in Sources */,
 				A1000004 /* SettingsWindowController.swift in Sources */,
 				A1000005 /* SettingsViewController.swift in Sources */,
+				A1000007 /* FeedbackEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

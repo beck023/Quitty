@@ -508,10 +508,6 @@ class WindowWatcher {
         // Final window count check
         queue.async {
             // Abort if a new window appeared after we were scheduled (generation mismatch)
-            // This must be read on the main thread.
-            DispatchQueue.main.sync {
-                // no-op: just a fence to read quitGenerations safely below
-            }
             let currentGeneration = DispatchQueue.main.sync { self.quitGenerations[pid] ?? 0 }
             if generation >= 0 && currentGeneration != generation {
                 Settings.shared.log("Final check aborted for \(appName) – window appeared after scheduling (gen \(generation) → \(currentGeneration)).")
@@ -520,7 +516,7 @@ class WindowWatcher {
             }
 
             // During space transitions, treat ALL apps with maximum caution
-            let lockTime = 12.0
+            let lockTime = 6.0
             
             if Date().timeIntervalSince(self.lastSpaceChangeDate) < lockTime {
                 Settings.shared.log("Space transition still active (\(Int(12.0 - Date().timeIntervalSince(self.lastSpaceChangeDate)))s remaining). Postponing final check for \(appName).")
@@ -564,6 +560,13 @@ class WindowWatcher {
 
                 Settings.shared.log("Final check confirmed 0 windows for \(appName). Terminating.")
                 DispatchQueue.main.async {
+                    // Record termination for history + feedback learning
+                    FeedbackEngine.shared.recordTermination(
+                        pid: pid,
+                        bundleID: app.bundleIdentifier ?? "",
+                        appName: appName,
+                        bundlePath: app.bundleURL?.path
+                    )
                     app.terminate()
                     self.pendingQuits.removeValue(forKey: pid)
                 }
@@ -587,9 +590,17 @@ class WindowWatcher {
         let isSpecial = app.map { isSpecialCareApp($0) } ?? false
         let appName = (app?.localizedName ?? "").lowercased()
         let bundleID = (app?.bundleIdentifier ?? "").lowercased()
-        // Certain apps are known for persistent unnamed ghosts
-        let isGhostProne = appName.contains("handbrake") || appName.contains("termora") || 
+        // Certain apps are known for persistent unnamed ghosts (hard-coded baseline)
+        let isGhostProneHardcoded = appName.contains("handbrake") || appName.contains("termora") ||
                            bundleID.contains("handbrake") || bundleID.contains("termora")
+        // Also check learned override from user feedback
+        let isGhostProneLearned = FeedbackEngine.shared.isGhostProneOverride(bundleID: app?.bundleIdentifier ?? bundleID)
+        let isGhostProne = isGhostProneHardcoded || isGhostProneLearned
+        // Sensitivity multiplier from feedback: 
+        // >1.0 means ignore MORE stuff (due to Failed Quit feedback)
+        // <1.0 means keep MORE stuff (due to False Quit feedback)
+        let sensitivityMult = FeedbackEngine.shared.sensitivityMultiplier(bundleID: app?.bundleIdentifier ?? bundleID)
+        let cautionMult = sensitivityMult > 0 ? 1.0 / sensitivityMult : 1.0
 
         for window in windowList {
             guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t, ownerPID == pid else { continue }
@@ -607,7 +618,10 @@ class WindowWatcher {
             let height = bounds?["Height"] as? CGFloat ?? 0
 
             if alpha < 0.01 { continue }
-            if width <= 40 || height <= 40 { continue }
+            
+            // Hardcoded minimum 40x40; drops to 20x20 if we've had many False Quits
+            let minDim: CGFloat = sensitivityMult < 0.6 ? 20 : 40
+            if width <= minDim || height <= minDim { continue }
 
             let name = window[kCGWindowName as String] as? String ?? ""
             let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -621,9 +635,11 @@ class WindowWatcher {
             
             // UNNAMED WINDOW LOGIC (Common in Electron, Java, Flutter, Terminals, etc.)
             
-            // Absolute minimum size for an unnamed window to be considered potentially real.
-            // Lowered to 80x80 to catch smaller Terminal windows while avoiding micro-artifacts.
-            if width < 80 || height < 80 { continue }
+            // Absolute minimum size for an unnamed window; adjusted by user feedback.
+            // A multiplier > 1.0 means we ignore LARGER windows (more aggressive quitting).
+            if width < (80 * sensitivityMult) || height < (80 * sensitivityMult) { 
+                continue 
+            }
             
             // Universal Ghost Sizes (known non-visible windows from various apps)
             let isGhostSize = (abs(width - 500) < 30 && abs(height - 500) < 30) || 
@@ -639,18 +655,42 @@ class WindowWatcher {
                               (abs(width - 1040) < 20 && abs(height - 1040) < 20) ||
                               (abs(width - 1291) < 20 && abs(height - 832) < 20) // Microsoft Excel ghost
             
-            if isGhostSize { continue }
-            
+            // Also check dynamically learned ghost sizes from user feedback
+            let learnedGhost = FeedbackEngine.shared.isLearnedGhostSize(
+                bundleID: app?.bundleIdentifier ?? bundleID,
+                width: width, height: height
+            )
+
             let isOnScreen = window[kCGWindowIsOnscreen as String] as? Bool ?? false
+
+            // If it matches a universal ghost size:
+            if !learnedGhost && isGhostSize {
+                // We only allow "False Quit" feedback to override universal ghosts IF the window is ONSCREEN.
+                // If it's on another space (off-screen), we continue to treat it as a ghost to avoid "Can't Quit" loops.
+                if sensitivityMult < 0.75 && isOnScreen {
+                    Settings.shared.log("   -> Universal ghost size (\(Int(width))x\(Int(height))) considered POSSIBLY REAL due to False Quit reports.")
+                } else {
+                    continue // Trust the universal ghost list (especially if off-screen)
+                }
+            } else if learnedGhost {
+                // If the user has reported "False Quit" multiple times, we stop trusting even learned ghosts
+                // but ONLY if they are ONSCREEN.
+                if sensitivityMult < 0.5 && isOnScreen {
+                    Settings.shared.log("   -> Learned ghost size (\(Int(width))x\(Int(height))) RECLAIMED as real due to repeated False Quits.")
+                } else {
+                    continue // Always trust user-learned ghosts
+                }
+            }
+            
             if !isOnScreen {
                 // Window on another space
                 // Ultra-conservative threshold for unnamed windows on other spaces.
-                // We strongly prefer "not killing" over "mistakenly killing".
-                // We only ignore these if they match known ghost sizes or are very small.
-                var threshold: CGFloat = isSpecial ? 100 : 200
+                var threshold: CGFloat = isSpecial ? 150 : 250
                 if isGhostProne {
-                    threshold = 300 // Slightly higher for ghost-prone apps but still safe
+                    threshold = 400
                 }
+                // Apply learned caution multiplier (scales threshold down = easier to be real)
+                threshold = threshold / cautionMult
                 
                 if width > threshold && height > threshold {
                     Settings.shared.log("   -> [isActualWindowPresent] Found window for \(pid) on another space (\(Int(width))x\(Int(height)))")
@@ -659,7 +699,8 @@ class WindowWatcher {
             } else {
                 // Onscreen unnamed window
                 // Even more conservative for onscreen unnamed windows.
-                let threshold: CGFloat = isSpecial ? 120 : 250
+                var threshold: CGFloat = isSpecial ? 120 : 250
+                threshold = threshold / cautionMult
                 if width > threshold && height > threshold {
                     Settings.shared.log("   -> [isActualWindowPresent] Found unnamed onscreen window for \(pid) (\(Int(width))x\(Int(height)))")
                     return true
@@ -682,7 +723,7 @@ class WindowWatcher {
             "slack", "cursor", "obsidian", "linear", "notion", "term", 
             "java", "jetbrains", "intellij", "warp", "termora", "tabby", 
             "wezterm", "alacritty", "microsoft", "excel", "powerpoint", "outlook", "word",
-            "handbrake", "windows app"
+            "handbrake", "windows app", "sharing", "screensharing"
         ]
         
         if specialKeywords.contains(where: { bundleID.contains($0) || appName.contains($0) }) {

@@ -62,3 +62,15 @@
 "btn_clear_logs" = "清除日志";
 "btn_export_logs" = "导出日志...";
 "github" = "GitHub";
+
+"tab_history" = "历史";
+"section_history" = "退出历史";
+"history_desc" = "被「静隐」自动退出的应用。如果某次退出是误退，点击「误退」来帮助「静隐」自我学习。";
+"history_empty" = "暂无退出记录。";
+"btn_clear_history" = "清除历史";
+"btn_false_quit" = "误退";
+"btn_cant_quit" = "未退";
+"btn_feedback" = "反馈";
+"feedback_false_quit" = "已反馈：误退";
+"feedback_cant_quit" = "已反馈：未退";
+"feedback_reported" = "已反馈";

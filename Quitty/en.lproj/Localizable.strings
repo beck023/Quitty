@@ -62,3 +62,15 @@
 "btn_clear_logs" = "Clear Logs";
 "btn_export_logs" = "Export Logs...";
 "github" = "GitHub";
+
+"tab_history" = "History";
+"section_history" = "QUIT HISTORY";
+"history_desc" = "Apps that were auto-quit by Quitty. If an app was quit by mistake, tap \"False Quit\" to teach Quitty.";
+"history_empty" = "No quit history yet.";
+"btn_clear_history" = "Clear History";
+"btn_false_quit" = "False Quit";
+"btn_cant_quit" = "Won't Quit";
+"btn_feedback" = "Feedback";
+"feedback_false_quit" = "Reported: False Quit";
+"feedback_cant_quit" = "Reported: Won't Quit";
+"feedback_reported" = "Reported";
