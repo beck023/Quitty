@@ -31,6 +31,7 @@ class WindowWatcher {
     private var observers: [pid_t: AXObserver] = [:]
     private var observerContexts: [pid_t: ObserverContext] = [:]
     private var pendingQuits: [pid_t: DispatchWorkItem] = [:]
+    private var quitGenerations: [pid_t: Int] = [:] // Incremented when a pending quit is cancelled
     private var armedPids: Set<pid_t> = [] // Apps that have (or had) at least one window
     private var lastHookTimes: [pid_t: Date] = [:] // When we started watching this app
     private var lastCheckTimes: [pid_t: Date] = [:] // Anti-spam for checkAndQuit
@@ -214,6 +215,7 @@ class WindowWatcher {
             self.lastCheckTimes.removeValue(forKey: pid)
             self.pendingQuits[pid]?.cancel()
             self.pendingQuits.removeValue(forKey: pid)
+            self.quitGenerations.removeValue(forKey: pid)
         }
     }
 
@@ -359,6 +361,8 @@ class WindowWatcher {
                 self.armedPids.insert(pid)
                 self.pendingQuits[pid]?.cancel()
                 self.pendingQuits.removeValue(forKey: pid)
+                // Bump the generation so any in-flight background final-check tasks abort
+                self.quitGenerations[pid] = (self.quitGenerations[pid] ?? 0) + 1
             }
             return
         }
@@ -477,10 +481,15 @@ class WindowWatcher {
                 // Slightly more responsive delays
                 let extraDelay = (isAppCurrentlyActive ? 2.5 : 0.5) + (isSpecial ? 2.0 : 1.0)
                 let totalDelay = 1.5 + extraDelay
+
+                // Capture the generation at the time we schedule; if a window appears
+                // before the workItem fires it will bump quitGenerations[pid] and the
+                // background task will abort.
+                let scheduledGeneration = self.quitGenerations[pid] ?? 0
                 
                 let workItem = DispatchWorkItem { [weak self] in
                     guard let self = self else { return }
-                    self.performFinalCheckAndQuit(pid: pid, appName: appName)
+                    self.performFinalCheckAndQuit(pid: pid, appName: appName, generation: scheduledGeneration)
                 }
 
                 self.pendingQuits[pid] = workItem
@@ -489,15 +498,27 @@ class WindowWatcher {
         }
     }
 
-    private func performFinalCheckAndQuit(pid: pid_t, appName: String) {
+    private func performFinalCheckAndQuit(pid: pid_t, appName: String, generation: Int = -1) {
         // Double check app is still alive
         guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else {
-            self.pendingQuits.removeValue(forKey: pid)
+            DispatchQueue.main.async { self.pendingQuits.removeValue(forKey: pid) }
             return
         }
 
         // Final window count check
         queue.async {
+            // Abort if a new window appeared after we were scheduled (generation mismatch)
+            // This must be read on the main thread.
+            DispatchQueue.main.sync {
+                // no-op: just a fence to read quitGenerations safely below
+            }
+            let currentGeneration = DispatchQueue.main.sync { self.quitGenerations[pid] ?? 0 }
+            if generation >= 0 && currentGeneration != generation {
+                Settings.shared.log("Final check aborted for \(appName) – window appeared after scheduling (gen \(generation) → \(currentGeneration)).")
+                DispatchQueue.main.async { self.pendingQuits.removeValue(forKey: pid) }
+                return
+            }
+
             // During space transitions, treat ALL apps with maximum caution
             let lockTime = 12.0
             
