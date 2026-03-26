@@ -40,6 +40,7 @@ struct LearnedRule: Codable {
     var ghostProneOverride: Bool
     var falseQuitCount: Int
     var cantQuitCount: Int
+    var lastFeedbackType: FeedbackType?
 }
 
 struct LearnedSize: Codable, Equatable, Hashable {
@@ -157,7 +158,9 @@ class FeedbackEngine: ObservableObject {
         learnFromFalseQuit(record: record)
         saveHistory()
         syncToCloud(record: record, type: .falseQuit)
-        Settings.shared.log("Feedback [误退] recorded for \(record.appName).")
+        setLastFeedbackType(.falseQuit, for: record.bundleID)
+        let logMsg = String(format: Settings.shared.localizedString("log_feedback_false_quit"), record.appName)
+        Settings.shared.log(logMsg)
         objectWillChange.send()
     }
 
@@ -181,8 +184,10 @@ class FeedbackEngine: ObservableObject {
             // Sync empty record for the counter tracking
             let tempRecord = TerminationRecord(date: Date(), bundleID: bundleID, appName: appName, appIconPath: bundlePath, windowSnapshots: [], feedbackType: .falseQuit)
             syncToCloud(record: tempRecord, type: .falseQuit)
+            setLastFeedbackType(.falseQuit, for: bundleID)
             
-            Settings.shared.log("Feedback [误退] (no history) recorded for \(appName).")
+            let logMsg = String(format: Settings.shared.localizedString("log_feedback_false_quit_no_history"), appName)
+            Settings.shared.log(logMsg)
             objectWillChange.send()
         }
     }
@@ -222,7 +227,8 @@ class FeedbackEngine: ObservableObject {
                     abs($0.width - newSize.width) < $0.tolerance && abs($0.height - newSize.height) < $0.tolerance
                 }) {
                     rule.learnedGhostSizes.append(newSize)
-                    Settings.shared.log("Learned ghost (\(Int(newSize.width))x\(Int(newSize.height))) from Failed Quit.")
+                    let logMsg = String(format: Settings.shared.localizedString("log_learned_ghost"), Int(newSize.width), Int(newSize.height))
+                    Settings.shared.log(logMsg)
                 }
             }
             // If we have more failures to quit than false quits, become more aggressive
@@ -242,9 +248,84 @@ class FeedbackEngine: ObservableObject {
             feedbackType: .cantQuit
         )
         syncToCloud(record: record, type: .cantQuit)
+        setLastFeedbackType(.cantQuit, for: bundleID)
 
-        Settings.shared.log("Feedback [未退] for \(appName). Captured \(snapshots.count) windows.")
+        let logMsg = String(format: Settings.shared.localizedString("log_feedback_cant_quit"), appName, snapshots.count)
+        Settings.shared.log(logMsg)
         DispatchQueue.main.async { self.objectWillChange.send() }
+    }
+
+    func undoFeedback(for bundleID: String) {
+        rulesQueue.async(flags: .barrier) {
+            guard var rule = self.learnedRules[bundleID], let type = rule.lastFeedbackType else { return }
+            
+            if type == .falseQuit {
+                rule.falseQuitCount = max(0, rule.falseQuitCount - 1)
+            } else if type == .cantQuit {
+                rule.cantQuitCount = max(0, rule.cantQuitCount - 1)
+                // Cannot easily undo learned sizes without more complex tracking,
+                // but we can at least revert the counters and type.
+            }
+            
+            rule.lastFeedbackType = nil
+            
+            // Re-evaluate ghostProneOverride
+            if rule.cantQuitCount <= rule.falseQuitCount {
+                rule.ghostProneOverride = false
+            }
+            
+            self.learnedRules[bundleID] = rule
+            self.saveRulesInternal()
+            
+            Settings.shared.log("Feedback [\(type.rawValue)] undone for \(bundleID).")
+            DispatchQueue.main.async { self.objectWillChange.send() }
+        }
+    }
+
+    func undoFeedback(recordID: UUID) {
+        guard let idx = history.firstIndex(where: { $0.id == recordID }) else { return }
+        let type = history[idx].feedbackType
+        let bundleID = history[idx].bundleID
+        
+        history[idx].feedbackType = nil
+        saveHistory()
+        
+        if let ft = type {
+            rulesQueue.async(flags: .barrier) {
+                guard var rule = self.learnedRules[bundleID] else { return }
+                if ft == .falseQuit {
+                    rule.falseQuitCount = max(0, rule.falseQuitCount - 1)
+                } else if ft == .cantQuit {
+                    rule.cantQuitCount = max(0, rule.cantQuitCount - 1)
+                }
+                
+                if rule.lastFeedbackType == ft {
+                    rule.lastFeedbackType = nil
+                }
+                
+                if rule.cantQuitCount <= rule.falseQuitCount {
+                    rule.ghostProneOverride = false
+                }
+                
+                self.learnedRules[bundleID] = rule
+                self.saveRulesInternal()
+            }
+        }
+        
+        Settings.shared.log("Feedback record \(recordID) undone.")
+        objectWillChange.send()
+    }
+
+    private func setLastFeedbackType(_ type: FeedbackType, for bundleID: String) {
+        rulesQueue.async(flags: .barrier) {
+            var rule = self.learnedRules[bundleID] ?? LearnedRule(
+                learnedGhostSizes: [], ghostProneOverride: false,
+                falseQuitCount: 0, cantQuitCount: 0, lastFeedbackType: nil
+            )
+            rule.lastFeedbackType = type
+            self.learnedRules[bundleID] = rule
+            self.saveRulesInternal()
+        }
     }
 
     // MARK: - Query Logic (Thread-safe)
@@ -262,6 +343,10 @@ class FeedbackEngine: ObservableObject {
 
     func isGhostProneOverride(bundleID: String) -> Bool {
         return rulesQueue.sync { learnedRules[bundleID]?.ghostProneOverride ?? false }
+    }
+
+    func lastFeedbackType(for bundleID: String) -> FeedbackType? {
+        return rulesQueue.sync { learnedRules[bundleID]?.lastFeedbackType }
     }
 
     func sensitivityMultiplier(bundleID: String) -> CGFloat {

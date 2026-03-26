@@ -10,7 +10,7 @@
 "tab_about" = "About";
 
 "section_general" = "GENERAL";
-"launch_hidden" = "Launch hidden (menu bar only)";
+"launch_hidden" = "Launch without opening window";
 "show_menubar_icon" = "Show menu bar icon";
 "launch_at_login" = "Launch at login";
 "language" = "Language";
@@ -65,12 +65,17 @@
 
 "tab_history" = "History";
 "section_history" = "QUIT HISTORY";
-"history_desc" = "Apps that were auto-quit by Quitty. If an app was quit by mistake, tap \"False Quit\" to teach Quitty.";
+"history_desc" = "Apps that were auto-quit by Quitty. If an app was quit by mistake, tap \"Report False Quit\" to teach Quitty.";
 "history_empty" = "No quit history yet.";
 "btn_clear_history" = "Clear History";
-"btn_false_quit" = "False Quit";
-"btn_cant_quit" = "Won't Quit";
+"btn_false_quit" = "Report False Quit";
+"btn_cant_quit" = "Report Won't Quit";
 "btn_feedback" = "Feedback";
 "feedback_false_quit" = "Reported: False Quit";
 "feedback_cant_quit" = "Reported: Won't Quit";
 "feedback_reported" = "Reported";
+"log_feedback_false_quit" = "Feedback [False Quit] recorded for %@.";
+"log_feedback_false_quit_no_history" = "Feedback [False Quit] (no history) recorded for %@.";
+"log_feedback_cant_quit" = "Feedback [Won't Quit] for %@. Captured %d windows.";
+"log_learned_ghost" = "Learned ghost (%dx%d) from Failed Quit.";
+"btn_undo_feedback" = "Undo Feedback";

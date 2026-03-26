@@ -229,7 +229,6 @@ struct AppListSettingsView: View {
     @ObservedObject var settings: Settings
     @ObservedObject var feedback: FeedbackEngine = .shared
     @State private var selection: String?
-    @State private var feedbackStatus: [String: String] = [:]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -254,11 +253,28 @@ struct AppListSettingsView: View {
                         HStack {
                             AppListRow(identifier: identifier)
                             Spacer()
-                            if let status = feedbackStatus[identifier] {
-                                Text(status)
-                                    .font(.caption2)
-                                    .foregroundColor(.green)
-                                    .transition(.opacity)
+                            let info = resolveAppInfo(for: identifier)
+                            if let ft = feedback.lastFeedbackType(for: info.bundleID ?? identifier) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: ft == .falseQuit ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                                        .foregroundColor(ft == .falseQuit ? .orange : .green)
+                                        .font(.caption2)
+                                    Text(settings.localizedString(ft == .falseQuit ? "feedback_false_quit" : "feedback_cant_quit"))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Button {
+                                        let bID = info.bundleID ?? identifier
+                                        feedback.undoFeedback(for: bID)
+                                    } label: {
+                                        Image(systemName: "arrow.uturn.backward.circle.fill")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary.opacity(0.8))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(settings.localizedString("btn_undo_feedback"))
+                                }
+                                .padding(.horizontal, 4)
                             }
 
                             Menu {
@@ -269,7 +285,6 @@ struct AppListSettingsView: View {
                                         appName: info.name,
                                         bundlePath: identifier.hasPrefix("/") ? identifier : nil
                                     )
-                                    showFeedbackConfirmation(for: identifier)
                                 }
                                 Button(settings.localizedString("btn_cant_quit")) {
                                     let info = resolveAppInfo(for: identifier)
@@ -281,7 +296,6 @@ struct AppListSettingsView: View {
                                         appName: info.name,
                                         pid: pid
                                     )
-                                    showFeedbackConfirmation(for: identifier)
                                 }
                             } label: {
                                 Text(settings.localizedString("btn_feedback"))
@@ -348,17 +362,6 @@ struct AppListSettingsView: View {
             }
         }
         .padding()
-    }
-    
-    private func showFeedbackConfirmation(for identifier: String) {
-        withAnimation {
-            feedbackStatus[identifier] = settings.localizedString("feedback_reported")
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            withAnimation {
-                feedbackStatus[identifier] = nil
-            }
-        }
     }
     
     private func addApp() {
@@ -685,6 +688,16 @@ struct HistoryRow: View {
                     Text(settings.localizedString(ft == .falseQuit ? "feedback_false_quit" : "feedback_cant_quit"))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    
+                    Button {
+                        feedback.undoFeedback(recordID: record.id)
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(.secondary.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                    .help(settings.localizedString("btn_undo_feedback"))
                 }
             } else {
                 Button(settings.localizedString("btn_false_quit")) {
